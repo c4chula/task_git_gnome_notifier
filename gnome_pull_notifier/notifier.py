@@ -1,35 +1,41 @@
 from collections.abc import Mapping
-from pathlib import PosixPath
-from daemon import Daemon
+from pathlib import PosixPath, Path
+from gnome_pull_notifier.daemon import Daemon
 import time
 import sys
+import signal
+import os
 
-import gi
+import gi # type: ignore
 gi.require_version('Notify', '0.7')
+
 from gi.repository import Notify
+from typing import Any, Dict
 
 from typing import Sequence
 
 import subprocess
 
-class MyDaemon(Daemon):
+PIDFILE_LOCATION = "/tmp/git-notifier.pid"
 
-    def __init__(self, *args, **kwargs) -> None:
+class GitNotifier(Daemon):
+
+    def __init__(self, *args: Sequence[Any], **kwargs: Dict[str, Any]) -> None:
         self.repo_paths: Mapping[str,PosixPath] = {} 
         super().__init__(*args, **kwargs)
 
     def add_repo(self, repo_path: PosixPath) -> None:
         if not repo_path.exists():
             sys.stderr.write("There's no real path")
-        if (p := subprocess.Popen(['git', 'fetch'], cwd=repo_path)).returncode != 0:
+        if subprocess.Popen(['git', 'fetch'], cwd=repo_path).returncode != 0:
             sys.stderr.write("There's no git repository") 
             return 
 
-    def __check_pid_file(self):
+    def __check_pid_file(self) -> bool:
         """return true if file exists"""
         return Path(self.pidfile).is_file()
 
-    def __get_pid(self):
+    def __get_pid(self) -> int | None:
         """return pid from pidfile"""
         if not self.__check_pid_file():
             sys.stderr.write(f"pidfile is not found\n")
@@ -40,26 +46,20 @@ class MyDaemon(Daemon):
 
         return pid
 
-    def __warn_exist_pid(self, pid):
-        sys.stdout.write(f"process {pid} already started!!!\n")
-
-    def __warn_non_exist_pid(self):
-        sys.stdout.write(f"process not started!!!\n")
-
-    def start(self):
+    def start(self) -> None:
         if self.__check_pid_file():
             pid = self.__get_pid()
-            self.__warn_exist_pid(pid)
+            sys.stdout.write(f"process {pid} already started!!!\n")
             sys.exit()
         
         self.daemonize()
         self.run()
 
 
-    def stop(self):
+    def stop(self) -> None:
         pid = self.__get_pid()
         if pid is None:
-            self.__warn_non_exist_pid()
+            sys.stdout.write(f"process not started!!!\n")
             sys.exit()
 
         os.kill(pid, signal.SIGTERM)
@@ -69,7 +69,7 @@ class MyDaemon(Daemon):
 
     def status(self):
         if not self.__check_pid_file():
-            self.__warn_non_exist_pid()
+            sys.stdout.write(f"process not started!!!\n")
             sys.exit()
 
         pid = self.__get_pid()
@@ -82,23 +82,3 @@ class MyDaemon(Daemon):
         while True:
             time.sleep(1)
 
-def dispatcher(daemon, op, *args) -> None:
-    match op:
-        case "start":
-            daemon.start()
-        case "restart":
-            daemon.restart()
-        case "stop":
-            daemon.stop()
-        case "status":
-            daemon.status()
-
-
-def main():
-    _, pidfile, op, *args = sys.argv
-    daemon = MyDaemon(pidfile)
-    dispatcher(daemon, op, *args)
-
-
-if __name__ == "__main__":
-    main()
