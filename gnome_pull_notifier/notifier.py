@@ -1,4 +1,3 @@
-from collections.abc import Mapping
 from pathlib import PosixPath, Path
 from gnome_pull_notifier.daemon import Daemon
 import time
@@ -6,34 +5,52 @@ import sys
 import signal
 import os
 
-import gi
 
-from gnome_pull_notifier.errors import GitRepoPathNotFound # type: ignore
+from gnome_pull_notifier.errors import GitRepoPathNotFound
+import gi
 gi.require_version('Notify', '0.7')
 
-from gi.repository import Notify
+from gi.repository import Notify 
 from typing import Any, Dict
 
-from typing import Sequence
+from typing import Sequence, List
+import logging
+
 
 import subprocess
 
 PIDFILE_LOCATION = "/tmp/git-notifier.pid"
 
-CONFIG_PATH = Path("~/.config/gitnotifier").expanduser()
+CONFIG_PATH = Path("~/.config/gitnotifier").expanduser().absolute()
 REPO_LIST_PATH = CONFIG_PATH / "repolist"
+LOG_PATH = CONFIG_PATH / "logs.log"
 
 CONFIG_PATH.mkdir(parents=True, exist_ok=True)
 REPO_LIST_PATH.touch(exist_ok=True)
+LOG_PATH.touch(exist_ok=True)
+DEFAULT_BRANCH="main"
+
+TIME_AWAIT_S = 15 
+
+Notify.init("Git Pull Notifier")
+logging.basicConfig(filename=LOG_PATH, level=logging.DEBUG)
 
 class GitNotifier(Daemon):
 
     def __init__(self, *args: Sequence[Any], **kwargs: Dict[str, Any]) -> None:
+        self.__repo_list = self.__get_repo_list()
         super().__init__(*args, **kwargs)
-    
+   
+    def __get_repo_list(self) -> List[PosixPath]:
+        repos: List[PosixPath]
+        with REPO_LIST_PATH.open() as repolist:
+            repos = [PosixPath(path) for path in repolist.readlines()]
+        return repos
+
     def __save_repo(self, *repos: str) -> None:
-        with REPO_LIST_PATH.resolve().open(mode="w+") as repolist:
-            repolist.writelines(repos)
+        with REPO_LIST_PATH.resolve().open(mode="a+") as repolist:
+            for repo in repos:
+                repolist.write(f"{repo}")
 
     def add_repo(self, repo_path: PosixPath) -> None:
         path = repo_path.expanduser().absolute()
@@ -44,6 +61,7 @@ class GitNotifier(Daemon):
             sys.stderr.write("There's no git repository\n") 
             return 
         self.__save_repo(str(path))
+        self.__repo_list = self.__get_repo_list()
 
     def __check_pid_file(self) -> bool:
         """return true if file exists"""
@@ -81,7 +99,7 @@ class GitNotifier(Daemon):
         sys.stdout.flush()
         os.remove(self.pidfile)
 
-    def status(self):
+    def status(self) -> None:
         if not self.__check_pid_file():
             sys.stdout.write(f"process not started!!!\n")
             sys.exit()
@@ -91,16 +109,56 @@ class GitNotifier(Daemon):
         sys.stdout.write(f"\trepo list path:{REPO_LIST_PATH}\n")
         sys.stdout.write(f"\trepo list:\n")
         try:
-            with REPO_LIST_PATH.open(mode="r+") as repolist:
-                for repo in repolist.readlines():
-                    sys.stdout.write(f"\t\t{repo}\n")
+            for repo in self.__get_repo_list():
+                sys.stdout.write(f"\t\t{repo}\n")
         except FileNotFoundError:
-            sys.stdout.write("repo list not found!!!")
+            sys.stdout.write("repo list not found!!!\n")
 
-    def fetch(self) -> None:
-        subprocess.run(['git', 'fetch'])
+    def __get_fetch(self, repo_path: PosixPath) -> None:
+        ps = subprocess.Popen(
+            [
+                "git",
+                "fetch",
+            ],
+            cwd=repo_path,
+        )
+        ps.wait()
+
+
+    def __get_log_info(self, repo_path: PosixPath) -> str | None:
+        ps = subprocess.Popen(
+            [
+                "git",
+                "log",
+                "--graph",
+                "--pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr)%Creset'",
+                "--abbrev-commit",
+                "--date=relative",
+                f"{DEFAULT_BRANCH}..origin/{DEFAULT_BRANCH}",
+            ],
+            cwd=repo_path,
+            stdout=subprocess.PIPE,
+            text=True,
+            env= {
+                "PAGER": "cat",
+            }
+        )
+        ps.wait()
+        output, _ = ps.communicate()
+        if output == "":
+            return None
+        return str(output)
 
     def run(self) -> None:
-        while True:
-            time.sleep(1)
+        try:
+            while True:
+                for repo in self.__repo_list:
+                    self.__get_fetch(repo)
+                    message = self.__get_log_info(repo)
+                    logging.debug(f"got log info: {message}")        
+                    if message is not None: 
+                        Notify.Notification.new(message).show()
+                time.sleep(TIME_AWAIT_S)
+        except Exception as e:
+            logging.exception(e)
 
