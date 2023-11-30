@@ -23,6 +23,9 @@ PIDFILE_LOCATION = "/tmp/git-notifier.pid"
 CONFIG_PATH = Path("~/.config/gitnotifier").expanduser()
 REPO_LIST_PATH = CONFIG_PATH / "repolist"
 
+CONFIG_PATH.mkdir(parents=True, exist_ok=True)
+REPO_LIST_PATH.touch(exist_ok=True)
+
 class GitNotifier(Daemon):
 
     def __init__(self, *args: Sequence[Any], **kwargs: Dict[str, Any]) -> None:
