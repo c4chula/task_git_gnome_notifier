@@ -3,11 +3,13 @@ import sys
 
 def dispatcher(daemon: GitNotifier) -> None:
     match sys.argv[1:]:
-        case ["start", *args]:
+        case ["start", *_]:
             daemon.start()
-        case ["restart", *args]:
+        case ["restart", *_]:
             daemon.restart()
-        case ["stop", *args]:
+        case ["stop", *_]:
             daemon.stop()
-        case ["status", *args]:
+        case ["status", *_]:
             daemon.status()
+        case ["add", str(repo), *_]:
+            daemon.add_test(repo)

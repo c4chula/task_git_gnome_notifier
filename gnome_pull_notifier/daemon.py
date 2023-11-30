@@ -8,6 +8,12 @@ import os
 import sys
 import atexit
 
+global repolist
+
+repolist = [
+    'test1', 'test2'
+]
+
 class Daemon:
     def __init__(self, pidfile):
         self.pidfile = pidfile
