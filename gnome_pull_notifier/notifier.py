@@ -150,15 +150,11 @@ class GitNotifier(Daemon):
         return str(output)
 
     def run(self) -> None:
-        try:
-            while True:
-                for repo in self.__repo_list:
-                    self.__get_fetch(repo)
-                    message = self.__get_log_info(repo)
-                    logging.debug(f"got log info: {message}")        
-                    if message is not None: 
-                        Notify.Notification.new(message).show()
-                time.sleep(TIME_AWAIT_S)
-        except Exception as e:
-            logging.exception(e)
-
+        while True:
+            for repo in self.__repo_list:
+                self.__get_fetch(repo)
+                message = self.__get_log_info(repo)
+                logging.debug(f"got log info: {message}")        
+                if message is not None: 
+                    Notify.Notification.new(message).show()
+            time.sleep(TIME_AWAIT_S)
