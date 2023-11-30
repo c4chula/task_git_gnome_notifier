@@ -6,7 +6,9 @@ import sys
 import signal
 import os
 
-import gi # type: ignore
+import gi
+
+from gnome_pull_notifier.errors import GitRepoPathNotFound # type: ignore
 gi.require_version('Notify', '0.7')
 
 from gi.repository import Notify
@@ -25,17 +27,20 @@ class GitNotifier(Daemon):
 
     def __init__(self, *args: Sequence[Any], **kwargs: Dict[str, Any]) -> None:
         super().__init__(*args, **kwargs)
-
-    def add_test(self, *repos: str) -> None:
+    
+    def __save_repo(self, *repos: str) -> None:
         with REPO_LIST_PATH.resolve().open(mode="w+") as repolist:
             repolist.writelines(repos)
 
     def add_repo(self, repo_path: PosixPath) -> None:
-        if not repo_path.exists():
-            sys.stderr.write("There's no real path\n")
-        if subprocess.Popen(['git', 'fetch'], cwd=repo_path).returncode != 0:
+        path = repo_path.expanduser().absolute()
+        if not path.exists():
+            sys.stderr.write("There's no real path: {path}\n")
+            raise GitRepoPathNotFound
+        if not (path / ".git").exists():
             sys.stderr.write("There's no git repository\n") 
             return 
+        self.__save_repo(str(path))
 
     def __check_pid_file(self) -> bool:
         """return true if file exists"""
@@ -80,12 +85,12 @@ class GitNotifier(Daemon):
 
         pid = self.__get_pid()
         sys.stdout.write(f"proccess {pid} running:\n")
-        sys.stdout.write(f"repo list path:{REPO_LIST_PATH}\n")
-        sys.stdout.write(f"repo list:\n")
+        sys.stdout.write(f"\trepo list path:{REPO_LIST_PATH}\n")
+        sys.stdout.write(f"\trepo list:\n")
         try:
             with REPO_LIST_PATH.open(mode="r+") as repolist:
                 for repo in repolist.readlines():
-                    sys.stdout.write(f"{repo}\n")
+                    sys.stdout.write(f"\t\t{repo}\n")
         except FileNotFoundError:
             sys.stdout.write("repo list not found!!!")
 

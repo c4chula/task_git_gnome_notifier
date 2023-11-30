@@ -1,3 +1,4 @@
+from pathlib import Path, PosixPath 
 from gnome_pull_notifier.notifier import GitNotifier
 import sys
 
@@ -11,5 +12,5 @@ def dispatcher(daemon: GitNotifier) -> None:
             daemon.stop()
         case ["status", *_]:
             daemon.status()
-        case ["add", str(repo), *_]:
-            daemon.add_test(repo)
+        case ["add", repo, *_]:
+            daemon.add_repo(PosixPath(repo))
