@@ -33,6 +33,7 @@ DEFAULT_BRANCH="main"
 TIME_AWAIT_S = 15 
 
 Notify.init("Git Pull Notifier")
+
 logging.basicConfig(filename=LOG_PATH, level=logging.DEBUG)
 
 class GitNotifier(Daemon):
@@ -132,18 +133,19 @@ class GitNotifier(Daemon):
             sys.stdout.write("repo list not found!!!\n")
 
     def __get_fetch(self, repo_path: PosixPath) -> None:
-        ps = subprocess.Popen(
+        output = subprocess.run(
             [
                 "git",
                 "fetch",
             ],
             cwd=repo_path,
+            capture_output=True,
         )
-        ps.wait()
+        logging.info(f"got message form git log: {output=}")
 
 
     def __get_log_info(self, repo_path: PosixPath) -> str | None:
-        ps = subprocess.Popen(
+        output = subprocess.run(
             [
                 "git",
                 "log",
@@ -154,17 +156,13 @@ class GitNotifier(Daemon):
                 f"{DEFAULT_BRANCH}..origin/{DEFAULT_BRANCH}",
             ],
             cwd=repo_path,
-            stdout=subprocess.PIPE,
+            capture_output=True,
             text=True,
             env= {
                 "PAGER": "cat",
             }
         )
-        ps.wait()
-        output, _ = ps.communicate()
-        if output == "":
-            return None
-        return str(output)
+        return output.stdout
 
     def run(self) -> None:
         while True:
