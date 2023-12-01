@@ -19,7 +19,7 @@ import logging
 
 import subprocess
 
-PIDFILE_LOCATION = "/tmp/git-notifier.pid"
+PIDFILE_LOCATION = Path("/tmp/git-notifier.pid")
 
 CONFIG_PATH = Path("~/.config/gitnotifier").expanduser().absolute()
 REPO_LIST_PATH = CONFIG_PATH / "repolist"
@@ -78,6 +78,13 @@ class GitNotifier(Daemon):
 
         return pid
 
+    def __check_pid(self, pid: int) -> bool:
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            return False
+        return True
+
     def start(self) -> None:
         if self.__check_pid_file():
             pid = self.__get_pid()
@@ -105,6 +112,16 @@ class GitNotifier(Daemon):
             sys.exit()
 
         pid = self.__get_pid()
+
+        if pid is None:
+            sys.stderr.write(f"pid of daemon not found!!!\n")
+            return
+
+        if not self.__check_pid(pid):
+            sys.stderr.write(f"proccess not found!!! removing pidfile")
+            PIDFILE_LOCATION.unlink(missing_ok=True)
+
+            
         sys.stdout.write(f"proccess {pid} running:\n")
         sys.stdout.write(f"\trepo list path:{REPO_LIST_PATH}\n")
         sys.stdout.write(f"\trepo list:\n")
