@@ -30,3 +30,9 @@ After you can use commands
 ```
 
 All paths stores in user config for gitnotifier `~/,config/gitnotifier/repolist` (Creates automatically)
+
+You can also set settings in `gnome_pull_notifier/notifier.py` (Personal recommendation). And now you can enjoy ugly notifications every 15 seconds)
+
+![Ugly Notifications](https://raw.githubusercontent.com/c4chula/task_git_gnome_notifier/main/screenshots/example.png)
+
+
